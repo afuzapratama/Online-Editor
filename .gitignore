@@ -1,0 +1,45 @@
+# File ini harus ditempatkan di folder root proyek Anda.
+
+# Abaikan dependensi Node.js di semua folder
+**/node_modules
+
+# Abaikan file log
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Abaikan file environment
+# Jangan pernah mengunggah file .env yang berisi kunci rahasia
+.env
+.env.local
+.env.*.local
+
+# Jangan abaikan file contoh environment
+!/.env.example
+
+# --- Frontend (Vite + React) ---
+# Abaikan folder hasil build
+frontend/dist
+# Abaikan cache Vite
+frontend/.vite
+# Abaikan file environment production yang spesifik untuk server Anda
+frontend/.env.production
+
+# --- Backend (Node.js + Express) ---
+# SANGAT PENTING: Abaikan kunci service account Firebase Anda
+backend/serviceAccountKey.json
+# Abaikan folder workspaces yang dibuat secara dinamis
+backend/workspaces
+# Abaikan file-file PM2
+*.pid
+*.log
+pm2.log
+
+# --- File Sistem Operasi ---
+# macOS
+.DS_Store
+# Windows
+Thumbs.db
