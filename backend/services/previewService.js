@@ -3,10 +3,8 @@ const fs = require('fs');
 const path = require('path');
 const firestoreService = require('./firestoreService');
 
-// Definisikan base directory untuk semua preview
 const previewsBaseDir = path.join(__dirname, '..', 'previews');
 
-// Pastikan folder 'previews' ada
 if (!fs.existsSync(previewsBaseDir)) {
     fs.mkdirSync(previewsBaseDir, { recursive: true });
 }
@@ -14,13 +12,11 @@ if (!fs.existsSync(previewsBaseDir)) {
 exports.preparePreview = async (userId) => {
     const userPreviewPath = path.join(previewsBaseDir, userId);
 
-    // Bersihkan dan buat ulang folder preview pengguna
     fs.rmSync(userPreviewPath, { recursive: true, force: true });
     fs.mkdirSync(userPreviewPath, { recursive: true });
 
     const allFiles = await firestoreService.getFiles(userId);
 
-    // Fungsi rekursif untuk menulis file dari struktur pohon
     const writeFilesRecursively = (files, currentPath) => {
         files.forEach(file => {
             const fullPath = path.join(currentPath, file.name);
@@ -37,14 +33,14 @@ exports.preparePreview = async (userId) => {
 
     writeFilesRecursively(allFiles, userPreviewPath);
 
-    // Kembalikan path URL publik, bukan localhost
-    return `/previews/${userId}`;
+    // === PERBAIKAN DI SINI ===
+    // Kembalikan path URL yang lebih spesifik, menunjuk ke index.html
+    return `/previews/${userId}/index.html`;
 };
 
-// Fungsi sinkronisasi tetap sama, tetapi path-nya diubah
+// ... (Fungsi syncToLocalWorkspace tidak berubah)
 exports.syncToLocalWorkspace = (userId, action, data) => {
     const userPreviewPath = path.join(previewsBaseDir, userId);
-    // Hanya lakukan sinkronisasi jika folder preview sudah pernah dibuat
     if (!fs.existsSync(userPreviewPath)) {
         return;
     }
@@ -62,7 +58,6 @@ exports.syncToLocalWorkspace = (userId, action, data) => {
                 fs.writeFileSync(filePath, content || '');
                 break;
             }
-            // ... (sisa case sama seperti sebelumnya)
             case 'create_folder': {
                 const folderPath = path.join(userPreviewPath, relativePath);
                 if (!fs.existsSync(folderPath)) fs.mkdirSync(folderPath, { recursive: true });
