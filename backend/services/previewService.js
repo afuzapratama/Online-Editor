@@ -1,4 +1,3 @@
-// backend/services/previewService.js
 const fs = require('fs');
 const path = require('path');
 const firestoreService = require('./firestoreService');
@@ -33,21 +32,16 @@ exports.preparePreview = async (userId) => {
 
     writeFilesRecursively(allFiles, userPreviewPath);
 
-    // === PERBAIKAN DEFINITIF ADA DI BARIS INI ===
-    // Kita sekarang secara eksplisit mengembalikan path ke file index.html
+    // Kembalikan path URL yang spesifik, menunjuk langsung ke index.html
     return `/previews/${userId}/index.html`;
 };
 
-// Fungsi syncToLocalWorkspace tidak berubah
+// Fungsi ini menyinkronkan perubahan ke folder pratinjau agar live reload (manual) berfungsi
 exports.syncToLocalWorkspace = (userId, action, data) => {
     const userPreviewPath = path.join(previewsBaseDir, userId);
-    if (!fs.existsSync(userPreviewPath)) {
-        return;
-    }
+    if (!fs.existsSync(userPreviewPath)) return;
     
-    console.log(`[Live Sync] Syncing action: ${action} for user: ${userId}`);
     const { relativePath, content, newName, oldPath } = data;
-    
     try {
         switch (action) {
             case 'save':

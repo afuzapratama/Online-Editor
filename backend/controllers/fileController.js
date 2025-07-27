@@ -1,4 +1,3 @@
-// backend/controllers/fileController.js
 const firestoreService = require('../services/firestoreService');
 const previewService = require('../services/previewService');
 
