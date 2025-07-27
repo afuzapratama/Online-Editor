@@ -7,6 +7,9 @@ import { EditorScreen } from './screens/EditorScreen';
 import { AdminDashboard } from './screens/AdminDashboard';
 import { InputDialog } from './components/Modal';
 
+// --- DEFINISIKAN BASE URL API DARI .ENV ---
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+
 const getAuthHeaders = async () => {
   const user = auth.currentUser;
   if (!user) return {};
@@ -24,14 +27,12 @@ function App() {
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   
   const [isAdmin, setIsAdmin] = useState(false);
-  const [view, setView] = useState('editor'); // 'editor' atau 'admin'
+  const [view, setView] = useState('editor');
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
-        // Cek custom claims untuk peran admin
         const tokenResult = await currentUser.getIdTokenResult();
-        console.log("User claims:", tokenResult.claims); // <-- LOG UNTUK DEBUG
         setIsAdmin(tokenResult.claims.role === 'admin');
       } else {
         setIsAdmin(false);
@@ -53,7 +54,7 @@ function App() {
     const loadingToast = toast.loading("Memperbarui nama...");
     try {
       const headers = await getAuthHeaders();
-      const response = await fetch('http://localhost:3001/api/user/profile', {
+      const response = await fetch(`${API_BASE_URL}/user/profile`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ displayName: newName })

@@ -4,6 +4,9 @@ import Editor from '@monaco-editor/react';
 import { auth } from '../firebase';
 import { FileTree } from '../components/FileTree';
 
+// --- DEFINISIKAN BASE URL API DARI .ENV ---
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+
 const getAuthHeaders = async () => {
   const user = auth.currentUser;
   if (!user) return {};
@@ -27,7 +30,7 @@ export const AdminDashboard = ({ onBackToEditor }) => {
     const fetchUsers = async () => {
       try {
         const headers = await getAuthHeaders();
-        const response = await fetch('http://localhost:3001/api/admin/users', { headers });
+        const response = await fetch(`${API_BASE_URL}/admin/users`, { headers });
         if (!response.ok) throw new Error('Gagal mengambil daftar pengguna.');
         const data = await response.json();
         setUsers(data);
@@ -41,7 +44,6 @@ export const AdminDashboard = ({ onBackToEditor }) => {
     fetchUsers();
   }, []);
 
-  // Efek untuk filtering pencarian
   useEffect(() => {
     const results = users.filter(user =>
       user.displayName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -53,10 +55,10 @@ export const AdminDashboard = ({ onBackToEditor }) => {
   const handleUserSelect = async (user) => {
     setSelectedUser(user);
     setUserFileTree([]);
-    setSelectedFileContent(null); // Reset pratinjau file
+    setSelectedFileContent(null);
     try {
       const headers = await getAuthHeaders();
-      const response = await fetch(`http://localhost:3001/api/admin/files/${user.uid}`, { headers });
+      const response = await fetch(`${API_BASE_URL}/admin/files/${user.uid}`, { headers });
       if (!response.ok) throw new Error('Gagal mengambil file pengguna.');
       const data = await response.json();
       setUserFileTree(data);
@@ -70,7 +72,7 @@ export const AdminDashboard = ({ onBackToEditor }) => {
     try {
         setSelectedFileContent("Memuat konten...");
         const headers = await getAuthHeaders();
-        const response = await fetch(`http://localhost:3001/api/admin/file-content/${selectedUser.uid}?path=${encodeURIComponent(file.path)}`, { headers });
+        const response = await fetch(`${API_BASE_URL}/admin/file-content/${selectedUser.uid}?path=${encodeURIComponent(file.path)}`, { headers });
         if (!response.ok) throw new Error('Gagal memuat konten file.');
         const content = await response.text();
         setSelectedFileContent(content);
@@ -82,7 +84,6 @@ export const AdminDashboard = ({ onBackToEditor }) => {
 
   return (
     <div className="w-screen h-screen bg-gray-900 text-gray-300 font-sans flex overflow-hidden">
-      {/* Panel Daftar Murid */}
       <div className="w-80 bg-gray-800 p-3 border-r border-gray-700 flex flex-col">
         <div className="flex justify-between items-center mb-2">
           <h2 className="text-xl font-bold">Dashboard Admin</h2>
@@ -115,8 +116,6 @@ export const AdminDashboard = ({ onBackToEditor }) => {
           )}
         </div>
       </div>
-
-      {/* Panel File & Pratinjau */}
       <div className="flex-1 flex">
         {selectedUser ? (
           <>
