@@ -1,12 +1,12 @@
 // backend/controllers/runController.js
-const liveServerService = require('../services/liveServerService');
+const previewService = require('../services/previewService');
 
 exports.runProject = async (req, res) => {
     try {
-        const url = await liveServerService.runServer(req.user.uid);
-        res.json({ url });
+        const urlPath = await previewService.preparePreview(req.user.uid);
+        res.json({ url: urlPath });
     } catch (error) {
-        console.error("Error running server:", error);
-        res.status(500).json({ message: "Gagal menjalankan server." });
+        console.error("Error preparing preview:", error);
+        res.status(500).json({ message: "Gagal menyiapkan pratinjau." });
     }
 };
