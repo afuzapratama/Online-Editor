@@ -33,11 +33,12 @@ exports.preparePreview = async (userId) => {
 
     writeFilesRecursively(allFiles, userPreviewPath);
 
-    // === PERBAIKAN DEFINITIF DI SINI ===
-    // Kembalikan path URL yang lebih spesifik, menunjuk langsung ke index.html
+    // === PERBAIKAN DEFINITIF ADA DI BARIS INI ===
+    // Kita sekarang secara eksplisit mengembalikan path ke file index.html
     return `/previews/${userId}/index.html`;
 };
 
+// Fungsi syncToLocalWorkspace tidak berubah
 exports.syncToLocalWorkspace = (userId, action, data) => {
     const userPreviewPath = path.join(previewsBaseDir, userId);
     if (!fs.existsSync(userPreviewPath)) {
