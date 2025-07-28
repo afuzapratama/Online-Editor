@@ -482,7 +482,7 @@ export const EditorScreen = ({
             disabled={!activeTabPath}
             className={`${baseButtonClass} bg-indigo-600 hover:bg-indigo-500 focus:ring-indigo-400 disabled:bg-gray-500 disabled:cursor-not-allowed`}
           >
-            Simpan File
+            Save File
           </button>
           <button
             onClick={handleRun}
@@ -490,7 +490,7 @@ export const EditorScreen = ({
             className={`${baseButtonClass} bg-green-600 hover:bg-green-500 focus:ring-green-400 disabled:bg-gray-500 disabled:cursor-not-allowed`}
           >
             {" "}
-            {isRunLoading ? "Menjalankan..." : "Run Project (HTML)"}{" "}
+            {isRunLoading ? "Running..." : "Run Project"}{" "}
           </button>
           {activeTabPath && activeTabPath.endsWith(".js") && (
             <button
@@ -498,7 +498,7 @@ export const EditorScreen = ({
               className={`${baseButtonClass} bg-blue-500 hover:bg-blue-400 focus:ring-blue-300 flex items-center gap-2`}
               title="Jalankan Script JavaScript Ini"
             >
-              <FaPlay /> <span>Jalankan Script</span>
+              <FaPlay /> <span>Run Script</span>
             </button>
           )}
         </div>
