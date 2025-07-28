@@ -31,8 +31,13 @@ frontend/.env.production
 # --- Backend (Node.js + Express) ---
 # SANGAT PENTING: Abaikan kunci service account Firebase Anda
 backend/serviceAccountKey.json
-# Abaikan folder workspaces yang dibuat secara dinamis
-backend/workspaces
+
+# --- PERBAIKAN DI SINI ---
+# Abaikan folder-folder yang dibuat secara dinamis oleh backend
+backend/workspaces/
+backend/previews/
+backend/preview_workspace/
+
 # Abaikan file-file PM2
 *.pid
 *.log
