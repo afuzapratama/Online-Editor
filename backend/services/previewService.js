@@ -106,7 +106,7 @@ exports.preparePreview = async (userId) => {
     };
     writeFilesRecursively(allFiles, userPreviewPath);
     
-    return `/previews/${userId}/index.html`;
+    return `/previews/${userId}/`;
 };
 
 exports.syncToLocalWorkspace = (userId, action, data) => {
