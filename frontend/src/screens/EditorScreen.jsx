@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Editor from '@monaco-editor/react';
 import toast from 'react-hot-toast';
-// PERBAIKAN: Hapus 'auth' dari import karena sudah tidak digunakan di sini
 import { Modal, InputDialog, ConfirmDialog } from '../components/Modal';
 import { ContextMenu } from '../components/ContextMenu';
 import { FileTree } from '../components/FileTree';
@@ -36,6 +35,16 @@ export const EditorScreen = ({ user, onSignOut, onUpdateProfile, isAdmin, onGoTo
   const [consoleMessages, setConsoleMessages] = useState([]);
   const [isConsoleOpen, setIsConsoleOpen] = useState(false);
   const editorRef = useRef(null);
+
+  useEffect(() => {
+    const handleMessage = (event) => {
+      if (event.data && event.data.source === 'preview-console') {
+        setConsoleMessages(prev => [...prev, { type: event.data.type, message: event.data.message }]);
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
 
   useEffect(() => {
     const handleBeforeUnload = (event) => {
@@ -86,7 +95,25 @@ export const EditorScreen = ({ user, onSignOut, onUpdateProfile, isAdmin, onGoTo
   const handleFileDelete = (file) => setModal({ isOpen: true, type: 'confirm', props: { title: 'Hapus File', message: `Apakah Anda yakin ingin menghapus file "${file.name}"?`, onCancel: () => setModal({ isOpen: false }), onConfirm: () => { const promise = apiRequest('/delete-file', 'DELETE', { path: file.path }); showApiResult(promise, { loading: 'Menghapus file...', success: `File ${file.name} dihapus!` }, () => closeTabAction(file.path)); setModal({ isOpen: false }); } } });
   const handleFolderDelete = (folder) => setModal({ isOpen: true, type: 'confirm', props: { title: 'Hapus Folder', message: `PERINGATAN: Anda akan menghapus folder "${folder.name}" dan SEMUA ISINYA. Lanjutkan?`, onCancel: () => setModal({ isOpen: false }), onConfirm: () => { const promise = apiRequest('/delete-folder', 'DELETE', { path: folder.path }); showApiResult(promise, { loading: 'Menghapus folder...', success: `Folder ${folder.name} dihapus!` }, () => fetchFileTree()); setModal({ isOpen: false }); } } });
   const handleSave = () => { if (!activeTabPath) return; const promise = apiRequest('/save-file', 'POST', { path: activeTabPath, content: fileContents[activeTabPath] }); showApiResult(promise, { loading: 'Menyimpan...', success: 'File berhasil disimpan!' }, () => { setDirtyFiles(prev => { const newSet = new Set(prev); newSet.delete(activeTabPath); return newSet; }); }); };
-  const handleRun = async () => { setIsRunLoading(true); try { const data = await apiRequest('/run', 'POST'); if (data.url) { window.open(window.location.origin + data.url, '_blank'); } else if (data.message) { toast.error(`Error: ${data.message}`); } } catch (error) { toast.error(error.message); } finally { setIsRunLoading(false); } };
+  
+  // === PERBAIKAN DEFINITIF DI SINI ===
+  const handleRun = async () => {
+    setIsRunLoading(true);
+    try {
+      const data = await apiRequest("/run", "POST");
+      if (data.url) {
+        // Langsung buka URL absolut yang diberikan oleh backend
+        window.open(data.url, "_blank");
+      } else if (data.message) {
+        toast.error(`Error: ${data.message}`);
+      }
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setIsRunLoading(false);
+    }
+  };
+
   const handleRename = (item) => { setModal({ isOpen: true, type: 'input', props: { title: `Ganti Nama ${item.name}`, initialValue: item.name, onCancel: () => setModal({ isOpen: false }), onConfirm: (newName) => { if (!newName || item.name === newName) { setModal({ isOpen: false }); return; } const promise = apiRequest('/rename', 'POST', { oldPath: item.path, newName }); showApiResult(promise, { loading: 'Mengganti nama...', success: 'Berhasil diganti nama!' }, () => fetchFileTree()); setModal({ isOpen: false }); } } }); };
   
   const handleContextMenu = (event, item) => { event.preventDefault(); setContextMenu({ visible: true, x: event.clientX, y: event.clientY, item: item, }); };
