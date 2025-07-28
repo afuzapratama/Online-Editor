@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Selamat Datang</title>
+    <script type="text/javascript" nonce="f1f28cb9564b4391915069327e0" src="//local.adguard.org?ts=1753551277976&amp;type=content-script&amp;dmn=localhost:5173&amp;url=http%3A%2F%2Flocalhost%3A5173%2Fapi%2Ffile-content%3Fpath%3Dindex.html&amp;app=chrome.exe&amp;css=2&amp;js=1&amp;rel=1&amp;rji=1&amp;sbe=1"></script>
+<script type="text/javascript" nonce="f1f28cb9564b4391915069327e0" src="//local.adguard.org?ts=1753551277976&amp;name=AdGuard%20Extra&amp;name=AdGuard%20Popup%20Blocker&amp;type=user-script"></script><link rel="stylesheet" href="style.css">
+
+<script>
+    (function() {
+        const originalLog = console.log;
+        const originalError = console.error;
+        const originalWarn = console.warn;
+
+        const sendMessage = (type, args) => {
+            try {
+                // Kirim pesan ke window induk (editor kita)
+                window.parent.postMessage({
+                    source: 'preview-console',
+                    type: type,
+                    message: args.map(arg => JSON.stringify(arg, null, 2)).join(' ')
+                }, '*');
+            } catch (e) {
+                // Abaikan error jika terjadi circular reference
+            }
+        };
+
+        console.log = function(...args) {
+            originalLog.apply(console, args);
+            sendMessage('log', args);
+        };
+        console.error = function(...args) {
+            originalError.apply(console, args);
+            sendMessage('error', args);
+        };
+        console.warn = function(...args) {
+            originalWarn.apply(console, args);
+            sendMessage('warn', args);
+        };
+    })();
+</script>
+</head>
+<body>
+    <div class="welcome-container">
+        <h1 id="welcome-text">Selamat Datang!</h1>
+        <p>Kami senang Anda berada di sini.</p>
+        <button onclick="changeMessage()">Klik Saya</button>
+    </div>
+    <a href="satu.html">kambing</a>
+    <script src="script.js"></script>
+</body>
+</html>

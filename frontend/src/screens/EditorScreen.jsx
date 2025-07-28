@@ -1,22 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Editor from '@monaco-editor/react';
 import toast from 'react-hot-toast';
-import { auth } from '../firebase';
+// PERBAIKAN: Hapus 'auth' dari import karena sudah tidak digunakan di sini
 import { Modal, InputDialog, ConfirmDialog } from '../components/Modal';
 import { ContextMenu } from '../components/ContextMenu';
 import { FileTree } from '../components/FileTree';
+import { ConsolePanel } from '../components/ConsolePanel';
+import { EditorWelcomeScreen } from '../components/WelcomeScreen';
 import { DiHtml5, DiCss3, DiJavascript1 } from 'react-icons/di';
-import { FaFolder, FaRegFileAlt, FaPencilAlt } from 'react-icons/fa';
-
-const getAuthHeaders = async () => {
-  const user = auth.currentUser;
-  if (!user) return {};
-  const token = await user.getIdToken();
-  return {
-    'Authorization': `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  };
-};
+import { FaFolder, FaRegFileAlt, FaPencilAlt, FaPlay } from 'react-icons/fa';
+import { apiRequest } from '../utils/api';
+import { useFileManager } from '../hooks/useFileManager';
 
 const FileIcon = ({ fileName }) => {
   const extension = fileName.split('.').pop();
@@ -28,42 +22,20 @@ const FileIcon = ({ fileName }) => {
   }
 };
 
-const EditorWelcomeScreen = () => (
-  <div className="w-full h-full flex flex-col items-center justify-center text-gray-500 p-8 text-center">
-    <h2 className="text-2xl font-semibold mb-2">Selamat Datang di Editor Anda</h2>
-    <p>Pilih file dari panel di sebelah kiri untuk mulai mengedit.</p>
-    <p>Atau, buat file atau folder baru untuk memulai proyek Anda.</p>
-  </div>
-);
-
 export const EditorScreen = ({ user, onSignOut, onUpdateProfile, isAdmin, onGoToAdmin }) => {
-  const [fileTree, setFileTree] = useState([]);
+  const {
+    fileTree, openTabs, activeTabPath, setActiveTabPath,
+    fileContents, dirtyFiles, setDirtyFiles, handleFileClick,
+    handleEditorChange, closeTabAction, showApiResult, fetchFileTree
+  } = useFileManager(user);
+
   const [isRunLoading, setIsRunLoading] = useState(false);
   const [modal, setModal] = useState({ isOpen: false, type: null, props: {} });
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, item: null });
-  const [openTabs, setOpenTabs] = useState([]);
-  const [activeTabPath, setActiveTabPath] = useState(null);
-  const [fileContents, setFileContents] = useState({});
-  const [dirtyFiles, setDirtyFiles] = useState(new Set());
+  const [consoleMessages, setConsoleMessages] = useState([]);
+  const [isConsoleOpen, setIsConsoleOpen] = useState(false);
   const editorRef = useRef(null);
-
-  const fetchFileTree = async () => {
-    try {
-      const headers = await getAuthHeaders();
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/files`, { headers });
-      const data = await response.json();
-      setFileTree(data);
-    } catch { // PERBAIKAN: Hapus parameter 'error' yang tidak terpakai
-      toast.error('Gagal memuat file Anda.');
-    }
-  };
-
-  useEffect(() => {
-    if (user) {
-      fetchFileTree();
-    }
-  }, [user]);
 
   useEffect(() => {
     const handleBeforeUnload = (event) => {
@@ -73,42 +45,72 @@ export const EditorScreen = ({ user, onSignOut, onUpdateProfile, isAdmin, onGoTo
       }
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-    };
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [dirtyFiles]);
 
-  const handleFileClick = async (file) => {
-    const isAlreadyOpen = openTabs.some(tab => tab.path === file.path);
-    if (!isAlreadyOpen) setOpenTabs(prevTabs => [...prevTabs, file]);
-    setActiveTabPath(file.path);
-
-    if (fileContents[file.path] === undefined) {
-      try {
-        const headers = await getAuthHeaders();
-        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/file-content?path=${encodeURIComponent(file.path)}`, { headers });
-        const content = await response.text();
-        setFileContents(prev => ({ ...prev, [file.path]: content }));
-      } catch {
-        setFileContents(prev => ({ ...prev, [file.path]: "Gagal memuat file." }));
-      }
+  const handleRunScript = (scriptContent) => {
+    if (!scriptContent) {
+        toast.error("Tidak ada kode untuk dijalankan.");
+        return;
     }
-    if (window.innerWidth < 768) setIsSidebarOpen(false);
+    setConsoleMessages([]);
+    setIsConsoleOpen(true);
+
+    const tempConsole = {
+      log: (...args) => setConsoleMessages(prev => [...prev, { type: 'log', message: args.map(arg => JSON.stringify(arg, null, 2)).join(' ') }]),
+      error: (...args) => setConsoleMessages(prev => [...prev, { type: 'error', message: args.map(arg => arg.stack || JSON.stringify(arg, null, 2)).join(' ') }]),
+      warn: (...args) => setConsoleMessages(prev => [...prev, { type: 'warn', message: args.map(arg => JSON.stringify(arg, null, 2)).join(' ') }]),
+    };
+
+    try {
+      const originalConsole = window.console;
+      window.console = tempConsole;
+      new Function(scriptContent)();
+      window.console = originalConsole;
+    } catch (error) {
+      tempConsole.error(error);
+    }
   };
 
-  const handleEditorChange = (value) => { if (activeTabPath) { setFileContents(prev => ({ ...prev, [activeTabPath]: value })); setDirtyFiles(prev => new Set(prev).add(activeTabPath)); } };
-  const closeTabAction = (path) => { const newTabs = openTabs.filter(tab => tab.path !== path); setOpenTabs(newTabs); const newContents = { ...fileContents }; delete newContents[path]; setFileContents(newContents); setDirtyFiles(prev => { const newSet = new Set(prev); newSet.delete(path); return newSet; }); if (activeTabPath === path) { setActiveTabPath(newTabs.length > 0 ? newTabs[newTabs.length - 1].path : null); } };
-  const handleCloseTab = (e, path) => { e.stopPropagation(); if (dirtyFiles.has(path)) { setModal({ isOpen: true, type: 'confirm', props: { title: 'Perubahan Belum Disimpan', message: `File "${openTabs.find(t => t.path === path)?.name}" memiliki perubahan yang belum disimpan. Tetap tutup?`, onCancel: () => setModal({ isOpen: false }), onConfirm: () => { closeTabAction(path); setModal({ isOpen: false }); } } }); } else { closeTabAction(path); } };
-  const showApiResult = (promise, messages, callback) => { toast.promise( promise.then(res => { if (!res.ok) { return res.json().then(err => { throw new Error(err.message) }); } return res.json(); }), { loading: messages.loading || 'Memproses...', success: (data) => { fetchFileTree(); if (callback) callback(); return messages.success || data.message || 'Berhasil!'; }, error: (err) => messages.error || err.toString(), } ); };
-  const handleCreateFile = (parentPath = '') => setModal({ isOpen: true, type: 'input', props: { title: 'Buat File Baru', onCancel: () => setModal({ isOpen: false }), onConfirm: async (fileName) => { if (!fileName) return; const fullPath = parentPath ? `${parentPath}/${fileName}` : fileName; const headers = await getAuthHeaders(); const promise = fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/create-file`, { method: 'POST', headers, body: JSON.stringify({ path: fullPath }), }); showApiResult(promise, { loading: 'Membuat file...', success: `File ${fileName} dibuat!` }); setModal({ isOpen: false }); } } });
-  const handleCreateFolder = (parentPath = '') => setModal({ isOpen: true, type: 'input', props: { title: 'Buat Folder Baru', onCancel: () => setModal({ isOpen: false }), onConfirm: async (folderName) => { if (!folderName) return; const fullPath = parentPath ? `${parentPath}/${folderName}` : folderName; const headers = await getAuthHeaders(); const promise = fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/create-folder`, { method: 'POST', headers, body: JSON.stringify({ path: fullPath }), }); showApiResult(promise, { loading: 'Membuat folder...', success: `Folder ${folderName} dibuat!` }); setModal({ isOpen: false }); } } });
-  const handleFileDelete = (file) => setModal({ isOpen: true, type: 'confirm', props: { title: 'Hapus File', message: `Apakah Anda yakin ingin menghapus file "${file.name}"?`, onCancel: () => setModal({ isOpen: false }), onConfirm: async () => { const headers = await getAuthHeaders(); const promise = fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/delete-file`, { method: 'DELETE', headers, body: JSON.stringify({ path: file.path }), }); showApiResult(promise, { loading: 'Menghapus file...', success: `File ${file.name} dihapus!` }, () => closeTabAction(file.path)); setModal({ isOpen: false }); } } });
-  const handleFolderDelete = (folder) => setModal({ isOpen: true, type: 'confirm', props: { title: 'Hapus Folder', message: `PERINGATAN: Anda akan menghapus folder "${folder.name}" dan SEMUA ISINYA. Lanjutkan?`, onCancel: () => setModal({ isOpen: false }), onConfirm: async () => { const headers = await getAuthHeaders(); const promise = fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/delete-folder`, { method: 'DELETE', headers, body: JSON.stringify({ path: folder.path }), }); showApiResult(promise, { loading: 'Menghapus folder...', success: `Folder ${folder.name} dihapus!` }, () => { const remainingTabs = openTabs.filter(tab => !tab.path.startsWith(folder.path)); setOpenTabs(remainingTabs); if (activeTabPath && activeTabPath.startsWith(folder.path)) { setActiveTabPath(remainingTabs.length > 0 ? remainingTabs[remainingTabs.length - 1].path : null); } }); setModal({ isOpen: false }); } } });
-  const handleSave = async () => { if (!activeTabPath) return; const headers = await getAuthHeaders(); const promise = fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/save-file`, { method: 'POST', headers, body: JSON.stringify({ path: activeTabPath, content: fileContents[activeTabPath] }), }); showApiResult(promise, { loading: 'Menyimpan...', success: 'File berhasil disimpan!' }, () => { setDirtyFiles(prev => { const newSet = new Set(prev); newSet.delete(activeTabPath); return newSet; }); }); };
-  const handleRun = async () => { setIsRunLoading(true); try { const headers = await getAuthHeaders(); const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/run`, { method: 'POST', headers }); const data = await response.json(); if (data.url) { window.open(data.url, '_blank'); } else if (data.message) { toast.error(`Error: ${data.message}`); } } catch { toast.error('Gagal menjalankan proyek.'); } finally { setIsRunLoading(false); } };
-  const handleRename = (item) => { setModal({ isOpen: true, type: 'input', props: { title: `Ganti Nama ${item.name}`, initialValue: item.name, onCancel: () => setModal({ isOpen: false }), onConfirm: async (newName) => { if (!newName || item.name === newName) { setModal({ isOpen: false }); return; } const headers = await getAuthHeaders(); const promise = fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/rename`, { method: 'POST', headers, body: JSON.stringify({ oldPath: item.path, newName }), }); showApiResult(promise, { loading: 'Mengganti nama...', success: 'Berhasil diganti nama!' }, () => { const newPath = item.path.substring(0, item.path.lastIndexOf('/') + 1) + newName; const updatedTabs = openTabs.map(tab => tab.path === item.path ? { ...tab, path: newPath, name: newName } : tab); setOpenTabs(updatedTabs); if (activeTabPath === item.path) { setActiveTabPath(newPath); } if (fileContents[item.path] !== undefined) { const newContents = { ...fileContents }; newContents[newPath] = newContents[item.path]; delete newContents[item.path]; setFileContents(newContents); } }); setModal({ isOpen: false }); } } }); };
+  const handleCloseTab = (e, path) => {
+    e.stopPropagation();
+    if (dirtyFiles.has(path)) {
+      setModal({ isOpen: true, type: 'confirm', props: { title: 'Perubahan Belum Disimpan', message: `File "${openTabs.find(t => t.path === path)?.name}" memiliki perubahan yang belum disimpan. Tetap tutup?`, onCancel: () => setModal({ isOpen: false }), onConfirm: () => { closeTabAction(path); setModal({ isOpen: false }); } } });
+    } else {
+      closeTabAction(path);
+    }
+  };
+
+  const handleCreateFile = (parentPath = '') => setModal({ isOpen: true, type: 'input', props: { title: 'Buat File Baru', onCancel: () => setModal({ isOpen: false }), onConfirm: (fileName) => { if (!fileName) return; const fullPath = parentPath ? `${parentPath}/${fileName}` : fileName; const promise = apiRequest('/create-file', 'POST', { path: fullPath }); showApiResult(promise, { loading: 'Membuat file...', success: `File ${fileName} dibuat!` }); setModal({ isOpen: false }); } } });
+  const handleCreateFolder = (parentPath = '') => setModal({ isOpen: true, type: 'input', props: { title: 'Buat Folder Baru', onCancel: () => setModal({ isOpen: false }), onConfirm: (folderName) => { if (!folderName) return; const fullPath = parentPath ? `${parentPath}/${folderName}` : folderName; const promise = apiRequest('/create-folder', 'POST', { path: fullPath }); showApiResult(promise, { loading: 'Membuat folder...', success: `Folder ${folderName} dibuat!` }); setModal({ isOpen: false }); } } });
+  const handleFileDelete = (file) => setModal({ isOpen: true, type: 'confirm', props: { title: 'Hapus File', message: `Apakah Anda yakin ingin menghapus file "${file.name}"?`, onCancel: () => setModal({ isOpen: false }), onConfirm: () => { const promise = apiRequest('/delete-file', 'DELETE', { path: file.path }); showApiResult(promise, { loading: 'Menghapus file...', success: `File ${file.name} dihapus!` }, () => closeTabAction(file.path)); setModal({ isOpen: false }); } } });
+  const handleFolderDelete = (folder) => setModal({ isOpen: true, type: 'confirm', props: { title: 'Hapus Folder', message: `PERINGATAN: Anda akan menghapus folder "${folder.name}" dan SEMUA ISINYA. Lanjutkan?`, onCancel: () => setModal({ isOpen: false }), onConfirm: () => { const promise = apiRequest('/delete-folder', 'DELETE', { path: folder.path }); showApiResult(promise, { loading: 'Menghapus folder...', success: `Folder ${folder.name} dihapus!` }, () => fetchFileTree()); setModal({ isOpen: false }); } } });
+  const handleSave = () => { if (!activeTabPath) return; const promise = apiRequest('/save-file', 'POST', { path: activeTabPath, content: fileContents[activeTabPath] }); showApiResult(promise, { loading: 'Menyimpan...', success: 'File berhasil disimpan!' }, () => { setDirtyFiles(prev => { const newSet = new Set(prev); newSet.delete(activeTabPath); return newSet; }); }); };
+  const handleRun = async () => { setIsRunLoading(true); try { const data = await apiRequest('/run', 'POST'); if (data.url) { window.open(window.location.origin + data.url, '_blank'); } else if (data.message) { toast.error(`Error: ${data.message}`); } } catch (error) { toast.error(error.message); } finally { setIsRunLoading(false); } };
+  const handleRename = (item) => { setModal({ isOpen: true, type: 'input', props: { title: `Ganti Nama ${item.name}`, initialValue: item.name, onCancel: () => setModal({ isOpen: false }), onConfirm: (newName) => { if (!newName || item.name === newName) { setModal({ isOpen: false }); return; } const promise = apiRequest('/rename', 'POST', { oldPath: item.path, newName }); showApiResult(promise, { loading: 'Mengganti nama...', success: 'Berhasil diganti nama!' }, () => fetchFileTree()); setModal({ isOpen: false }); } } }); };
+  
   const handleContextMenu = (event, item) => { event.preventDefault(); setContextMenu({ visible: true, x: event.clientX, y: event.clientY, item: item, }); };
-  const buildContextMenuItems = () => { const { item } = contextMenu; if (!item) return []; let items = []; if (item.type === 'folder') { items.push({ label: 'Buat File Baru...', onClick: () => handleCreateFile(item.path) }); items.push({ label: 'Buat Folder Baru...', onClick: () => handleCreateFolder(item.path) }); } items.push({ label: 'Ganti Nama...', onClick: () => handleRename(item) }); items.push({ label: 'Hapus', onClick: () => item.type === 'file' ? handleFileDelete(item) : handleFolderDelete(item) }); return items; };
+  const buildContextMenuItems = () => {
+    const { item } = contextMenu;
+    if (!item) return [];
+    let items = [];
+
+    if (item.type === 'file' && item.name.endsWith('.js')) {
+      items.push({ 
+        label: 'Jalankan JavaScript', 
+        onClick: () => handleRunScript(fileContents[item.path]) 
+      });
+    }
+
+    if (item.type === 'folder') {
+      items.push({ label: 'Buat File Baru...', onClick: () => handleCreateFile(item.path) });
+      items.push({ label: 'Buat Folder Baru...', onClick: () => handleCreateFolder(item.path) });
+    }
+    items.push({ label: 'Ganti Nama...', onClick: () => handleRename(item) });
+    items.push({ label: 'Hapus', onClick: () => item.type === 'file' ? handleFileDelete(item) : handleFolderDelete(item) });
+    return items;
+  };
+  
   const handleEditorDidMount = (editor, monaco) => { editorRef.current = editor; editor.addAction({ id: 'select-all', label: 'Pilih Semua (Select All)', keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyA], contextMenuGroupId: 'navigation', contextMenuOrder: 1.5, run: (ed) => { const model = ed.getModel(); if (model) { ed.setSelection(model.getFullModelRange()); } }, }); editor.addAction({ id: 'copy-selection', label: 'Salin Pilihan (Copy)', contextMenuGroupId: 'navigation', contextMenuOrder: 1.6, run: (ed) => { if (!ed.getSelection().isEmpty()) { ed.focus(); document.execCommand('copy'); toast.success('Teks disalin ke clipboard!'); } else { toast('Tidak ada teks yang dipilih.', { icon: 'ℹ️' }); } } }); };
   const baseButtonClass = "px-4 py-2 rounded text-white font-semibold focus:outline-none focus:ring-2 focus:ring-opacity-50 transition-colors text-sm";
   
@@ -142,12 +144,49 @@ export const EditorScreen = ({ user, onSignOut, onUpdateProfile, isAdmin, onGoTo
         </div>
       </div>
       <div className="flex-1 flex flex-col min-w-0">
-        <div className="bg-gray-700 p-2 flex items-center gap-3"> <button className="md:hidden p-1 text-white text-2xl" onClick={() => setIsSidebarOpen(true)}> &#9776; </button> <button onClick={handleSave} disabled={!activeTabPath} className={`${baseButtonClass} bg-indigo-600 hover:bg-indigo-500 focus:ring-indigo-400 disabled:bg-gray-500 disabled:cursor-not-allowed`}>Simpan File</button> <button onClick={handleRun} disabled={isRunLoading} className={`${baseButtonClass} bg-green-600 hover:bg-green-500 focus:ring-green-400 disabled:bg-gray-500 disabled:cursor-not-allowed`}> {isRunLoading ? 'Menjalankan...' : 'Run Project'} </button> </div>
+        <div className="bg-gray-700 p-2 flex items-center gap-3">
+          <button className="md:hidden p-1 text-white text-2xl" onClick={() => setIsSidebarOpen(true)}> &#9776; </button>
+          <button onClick={handleSave} disabled={!activeTabPath} className={`${baseButtonClass} bg-indigo-600 hover:bg-indigo-500 focus:ring-indigo-400 disabled:bg-gray-500 disabled:cursor-not-allowed`}>Simpan File</button>
+          <button onClick={handleRun} disabled={isRunLoading} className={`${baseButtonClass} bg-green-600 hover:bg-green-500 focus:ring-green-400 disabled:bg-gray-500 disabled:cursor-not-allowed`}> {isRunLoading ? 'Menjalankan...' : 'Run Project (HTML)'} </button>
+          {activeTabPath && activeTabPath.endsWith('.js') && (
+            <button 
+              onClick={() => handleRunScript(fileContents[activeTabPath])} 
+              className={`${baseButtonClass} bg-blue-500 hover:bg-blue-400 focus:ring-blue-300 flex items-center gap-2`}
+              title="Jalankan Script JavaScript Ini"
+            >
+              <FaPlay /> <span>Jalankan Script</span>
+            </button>
+          )}
+        </div>
         <div className={`bg-gray-900 flex overflow-x-auto flex-nowrap ${openTabs.length > 0 ? 'min-h-[40px]' : 'h-0'} transition-all duration-200`}> {openTabs.map(tab => { const isDirty = dirtyFiles.has(tab.path); return ( <div key={tab.path} onClick={() => setActiveTabPath(tab.path)} className={`flex items-center cursor-pointer py-2 px-4 text-sm whitespace-nowrap border-r border-gray-800 ${activeTabPath === tab.path ? 'bg-gray-700 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white'}`}>
           <span className="mr-2 flex-shrink-0"><FileIcon fileName={tab.name} /></span>
           <span>{tab.name}</span>
           <button onClick={(e) => handleCloseTab(e, tab.path)} className="ml-3 text-gray-500 hover:text-white rounded-full hover:bg-gray-600 w-5 h-5 flex items-center justify-center"> {isDirty ? '●' : '×'} </button> </div> ); })} </div>
-        <div className="flex-grow relative min-h-0"> {activeTabPath ? ( <Editor height="100%" width="100%" path={activeTabPath} value={fileContents[activeTabPath] || ''} theme="vs-dark" onChange={handleEditorChange} onMount={handleEditorDidMount} options={{ fontSize: 14, padding: { top: 15 }, minimap: { enabled: false }, wordWrap: 'on', lineNumbersMinChars: 3, glyphMargin: false }} /> ) : ( <EditorWelcomeScreen /> )} </div>
+        
+        <div className="flex-grow flex flex-col relative min-h-0">
+          <div className="flex-grow relative min-h-0">
+            {activeTabPath ? (
+              <Editor
+                height="100%"
+                width="100%"
+                path={activeTabPath}
+                value={fileContents[activeTabPath] || ''}
+                theme="vs-dark"
+                onChange={handleEditorChange}
+                onMount={handleEditorDidMount}
+                options={{ fontSize: 14, padding: { top: 15 }, minimap: { enabled: false }, wordWrap: 'on', lineNumbersMinChars: 3, glyphMargin: false }}
+              />
+            ) : (
+              <EditorWelcomeScreen />
+            )}
+          </div>
+          <ConsolePanel 
+            messages={consoleMessages} 
+            onClear={() => setConsoleMessages([])}
+            isOpen={isConsoleOpen}
+            setIsOpen={setIsConsoleOpen}
+          />
+        </div>
       </div>
     </div>
   );
