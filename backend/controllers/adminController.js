@@ -1,7 +1,6 @@
 // backend/controllers/adminController.js
 const firestoreService = require('../services/firestoreService');
 
-// Mengambil daftar semua pengguna
 exports.getAllUsers = async (req, res) => {
     try {
         const users = await firestoreService.getAllUsers();
@@ -12,7 +11,6 @@ exports.getAllUsers = async (req, res) => {
     }
 };
 
-// Mengambil struktur file dari pengguna tertentu
 exports.getUserFiles = async (req, res) => {
     try {
         const { userId } = req.params;
@@ -23,12 +21,10 @@ exports.getUserFiles = async (req, res) => {
     }
 };
 
-// --- FUNGSI BARU ---
-// Mengambil isi file dari pengguna tertentu
 exports.getUserFileContent = async (req, res) => {
     try {
         const { userId } = req.params;
-        const { path } = req.query; // Ambil path file dari query parameter
+        const { path } = req.query;
         const content = await firestoreService.getFileContent(userId, path);
         res.send(content);
     } catch (error) {

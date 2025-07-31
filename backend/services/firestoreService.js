@@ -1,5 +1,5 @@
 // backend/services/firestoreService.js
-const { db, auth } = require('../config/firebase'); // Import auth juga
+const { db, auth } = require('../config/firebase');
 const path = require('path');
 
 const getUserFilesCollection = (userId) => db.collection('users').doc(userId).collection('files');
@@ -29,33 +29,20 @@ exports.getFiles = async (userId) => {
 exports.getFileContent = async (userId, relativePath) => {
     const docRef = getUserFilesCollection(userId).doc(relativePath.replace(/\//g, '_'));
     const doc = await docRef.get();
-    if (!doc.exists) {
-        throw new Error('File not found');
-    }
+    if (!doc.exists) throw new Error('File not found');
     return doc.data().content || '';
 };
 
 exports.createFile = (userId, relativePath) => {
     const docId = relativePath.replace(/\//g, '_');
     const docRef = getUserFilesCollection(userId).doc(docId);
-    return docRef.create({
-        path: relativePath,
-        name: path.basename(relativePath),
-        parentPath: path.dirname(relativePath) === '.' ? '' : path.dirname(relativePath),
-        type: 'file',
-        content: ''
-    });
+    return docRef.create({ path: relativePath, name: path.basename(relativePath), parentPath: path.dirname(relativePath) === '.' ? '' : path.dirname(relativePath), type: 'file', content: '' });
 };
 
 exports.createFolder = (userId, relativePath) => {
     const docId = relativePath.replace(/\//g, '_');
     const docRef = getUserFilesCollection(userId).doc(docId);
-    return docRef.create({
-        path: relativePath,
-        name: path.basename(relativePath),
-        parentPath: path.dirname(relativePath) === '.' ? '' : path.dirname(relativePath),
-        type: 'folder'
-    });
+    return docRef.create({ path: relativePath, name: path.basename(relativePath), parentPath: path.dirname(relativePath) === '.' ? '' : path.dirname(relativePath), type: 'folder' });
 };
 
 exports.saveFile = (userId, relativePath, content) => {
@@ -108,17 +95,34 @@ exports.updateUserProfile = (userId, profileData) => {
     return userDocRef.set(profileData, { merge: true });
 };
 
-// --- FUNGSI BARU UNTUK ADMIN ---
 exports.getAllUsers = async () => {
-    const listUsersResult = await auth.listUsers(1000); // Ambil hingga 1000 pengguna
-    return listUsersResult.users.map(userRecord => {
-        // Hanya kembalikan data yang relevan dan aman
-        return {
-            uid: userRecord.uid,
-            email: userRecord.email,
-            displayName: userRecord.displayName,
-            photoURL: userRecord.photoURL,
-            disabled: userRecord.disabled
-        };
-    });
+    const listUsersResult = await auth.listUsers(1000);
+    const usersFromAuth = listUsersResult.users;
+    const usersWithFirestoreData = await Promise.all(
+        usersFromAuth.map(async (userRecord) => {
+            const userDocRef = db.collection('users').doc(userRecord.uid);
+            const userDoc = await userDocRef.get();
+            const firestoreData = userDoc.exists ? userDoc.data() : {};
+            return {
+                uid: userRecord.uid,
+                email: userRecord.email,
+                displayName: userRecord.displayName,
+                photoURL: userRecord.photoURL,
+                disabled: userRecord.disabled,
+                classId: firestoreData.classId || null,
+            };
+        })
+    );
+    return usersWithFirestoreData;
+};
+
+
+// --- FUNGSI BARU ---
+exports.getUserProfile = async (userId) => {
+    const userDocRef = db.collection('users').doc(userId);
+    const doc = await userDocRef.get();
+    if (!doc.exists) {
+        return null; // Kembalikan null jika profil belum ada
+    }
+    return doc.data();
 };

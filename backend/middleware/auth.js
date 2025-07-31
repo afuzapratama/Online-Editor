@@ -8,7 +8,7 @@ const verifyToken = async (req, res, next) => {
     }
     try {
         const decodedToken = await auth.verifyIdToken(token);
-        req.user = decodedToken; // Tambahkan info pengguna ke objek request
+        req.user = decodedToken;
         next();
     } catch (error) {
         res.status(403).send('Token tidak valid.');
